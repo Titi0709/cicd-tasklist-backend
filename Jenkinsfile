@@ -15,65 +15,35 @@ pipeline {
     }
 
     stage('Install dependencies') {
-      agent {
-        docker {
-          image 'node:22-alpine'
-          reuseNode true
-        }
-      }
       steps {
-        sh 'npm ci'
+        sh 'docker run --rm -v "$PWD":/app -w /app node:22-alpine npm ci'
       }
     }
 
     stage('Run unit tests') {
-      agent {
-        docker {
-          image 'node:22-alpine'
-          reuseNode true
-        }
-      }
       steps {
-        sh 'npm run test:coverage'
+        sh 'docker run --rm -v "$PWD":/app -w /app node:22-alpine npm run test:coverage'
       }
     }
 
     stage('Run E2E tests') {
-      agent {
-        docker {
-          image 'node:22-alpine'
-          reuseNode true
-        }
-      }
       steps {
-        sh 'npm run test:e2e:coverage || true'
+        sh 'docker run --rm -v "$PWD":/app -w /app node:22-alpine sh -lc "npm run test:e2e:coverage || true"'
       }
     }
 
     stage('Build backend') {
-      agent {
-        docker {
-          image 'node:22-alpine'
-          reuseNode true
-        }
-      }
       steps {
-        sh 'npm run build'
+        sh 'docker run --rm -v "$PWD":/app -w /app node:22-alpine npm run build'
       }
     }
 
     stage('Quality analysis with SonarQube') {
-      agent {
-        docker {
-          image 'node:22-alpine'
-          reuseNode true
-        }
-      }
       steps {
         script {
           withCredentials([string(credentialsId: 'sonar-backend-token', variable: 'SONAR_TOKEN')]) {
             sh '''
-              npx sonar-scanner \
+              docker run --rm -v "$PWD":/app -w /app node:22-alpine sh -lc "npx sonar-scanner \
                 -Dsonar.projectKey=cicd-tasklist-backend \
                 -Dsonar.projectName=cicd-tasklist-backend \
                 -Dsonar.sources=src \
@@ -83,7 +53,7 @@ pipeline {
                 -Dsonar.host.url=http://localhost:9000 \
                 -Dsonar.login=${SONAR_TOKEN} \
                 -Dsonar.exclusions=src/__tests__/**,**/node_modules/**,**/dist/**,**/coverage/** \
-                -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info || true
+                -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info || true"
             '''
           }
         }
