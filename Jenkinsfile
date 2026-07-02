@@ -16,25 +16,25 @@ pipeline {
 
     stage('Install dependencies') {
       steps {
-        sh 'docker run --rm -v "$PWD":/app -w /app node:22-alpine npm ci'
+        sh 'npm ci'
       }
     }
 
     stage('Run unit tests') {
       steps {
-        sh 'docker run --rm -v "$PWD":/app -w /app node:22-alpine npm run test:coverage'
+        sh 'npm run test:coverage'
       }
     }
 
     stage('Run E2E tests') {
       steps {
-        sh 'docker run --rm -v "$PWD":/app -w /app node:22-alpine sh -lc "npm run test:e2e:coverage || true"'
+        sh 'npm run test:e2e:coverage || true'
       }
     }
 
     stage('Build backend') {
       steps {
-        sh 'docker run --rm -v "$PWD":/app -w /app node:22-alpine npm run build'
+        sh 'npm run build'
       }
     }
 
@@ -43,7 +43,7 @@ pipeline {
         script {
           withCredentials([string(credentialsId: 'sonar-backend-token', variable: 'SONAR_TOKEN')]) {
             sh '''
-              docker run --rm -v "$PWD":/app -w /app node:22-alpine sh -lc "npx sonar-scanner \
+              npx sonar-scanner \
                 -Dsonar.projectKey=cicd-tasklist-backend \
                 -Dsonar.projectName=cicd-tasklist-backend \
                 -Dsonar.sources=src \
@@ -53,7 +53,7 @@ pipeline {
                 -Dsonar.host.url=http://localhost:9000 \
                 -Dsonar.login=${SONAR_TOKEN} \
                 -Dsonar.exclusions=src/__tests__/**,**/node_modules/**,**/dist/**,**/coverage/** \
-                -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info || true"
+                -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info || true
             '''
           }
         }
