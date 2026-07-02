@@ -5,7 +5,8 @@ pipeline {
     NODE_ENV = 'test'
     DOCKER_IMAGE = 'thibaultlefay/tasklist-backend:latest'
     SONAR_HOST_URL = 'http://localhost:9000'
-    NVM_DIR = "${HOME}/.nvm"
+    NODE_VERSION = 'v20.11.0'
+    NODE_PATH = '/tmp/node-${NODE_VERSION}-linux-x64/bin'
   }
 
   stages {
@@ -15,26 +16,22 @@ pipeline {
       }
     }
 
-    stage('Setup Node.js with NVM') {
+    stage('Setup Node.js') {
       steps {
         sh '''
-          # Install NVM if not present
-          if [ ! -d "$NVM_DIR" ]; then
-            echo "Installing NVM..."
-            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+          # Check if node is already available
+          if command -v node &> /dev/null; then
+            echo "Node.js already available:"
+            node --version
+            npm --version
+          else
+            echo "Installing Node.js ${NODE_VERSION}..."
+            cd /tmp
+            curl -fsSL https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-linux-x64.tar.xz | tar -xJ
+            export PATH=${NODE_PATH}:$PATH
+            node --version
+            npm --version
           fi
-          
-          # Load NVM
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-          
-          # Install Node.js 20
-          nvm install 20
-          nvm use 20
-          
-          # Verify installation
-          node --version
-          npm --version
         '''
       }
     }
@@ -42,9 +39,7 @@ pipeline {
     stage('Install dependencies') {
       steps {
         sh '''
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-          nvm use 20
+          export PATH=${NODE_PATH}:$PATH
           npm ci
         '''
       }
@@ -53,9 +48,7 @@ pipeline {
     stage('Run unit tests') {
       steps {
         sh '''
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-          nvm use 20
+          export PATH=${NODE_PATH}:$PATH
           npm run test:coverage
         '''
       }
@@ -64,9 +57,7 @@ pipeline {
     stage('Run E2E tests') {
       steps {
         sh '''
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-          nvm use 20
+          export PATH=${NODE_PATH}:$PATH
           npm run test:e2e:coverage || true
         '''
       }
@@ -75,9 +66,7 @@ pipeline {
     stage('Build backend') {
       steps {
         sh '''
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-          nvm use 20
+          export PATH=${NODE_PATH}:$PATH
           npm run build
         '''
       }
@@ -88,9 +77,7 @@ pipeline {
         script {
           withCredentials([string(credentialsId: 'sonar-backend-token', variable: 'SONAR_TOKEN')]) {
             sh '''
-              export NVM_DIR="$HOME/.nvm"
-              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-              nvm use 20
+              export PATH=${NODE_PATH}:$PATH
               
               npx sonar-scanner \
                 -Dsonar.projectKey=cicd-tasklist-backend \
@@ -112,9 +99,8 @@ pipeline {
     stage('Security scan with Trivy') {
       steps {
         sh '''
-          # Check if trivy is installed, if not install via docker
+          # Use Docker image for Trivy if not installed
           if ! command -v trivy &> /dev/null; then
-            echo "Trivy not found, using Docker..."
             docker run --rm -v $(pwd):/root aquasec/trivy fs /root --exit-code 0 --format table || true
           else
             trivy fs --exit-code 0 --format table . || true
