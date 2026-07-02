@@ -16,25 +16,25 @@ pipeline {
 
     stage('Install dependencies') {
       steps {
-        sh 'npm ci'
+        bat 'npm ci'
       }
     }
 
     stage('Run unit tests') {
       steps {
-        sh 'npm run test:coverage'
+        bat 'npm run test:coverage'
       }
     }
 
     stage('Run E2E tests') {
       steps {
-        sh 'npm run test:e2e:coverage || true'
+        bat 'npm run test:e2e:coverage'
       }
     }
 
     stage('Build backend') {
       steps {
-        sh 'npm run build'
+        bat 'npm run build'
       }
     }
 
@@ -42,19 +42,19 @@ pipeline {
       steps {
         script {
           withCredentials([string(credentialsId: 'sonar-backend-token', variable: 'SONAR_TOKEN')]) {
-            sh '''
-              npx sonar-scanner \
-                -Dsonar.projectKey=cicd-tasklist-backend \
-                -Dsonar.projectName=cicd-tasklist-backend \
-                -Dsonar.sources=src \
-                -Dsonar.tests=src/__tests__ \
-                -Dsonar.language=ts \
-                -Dsonar.sourceEncoding=UTF-8 \
-                -Dsonar.host.url=http://localhost:9000 \
-                -Dsonar.login=${SONAR_TOKEN} \
-                -Dsonar.exclusions=src/__tests__/**,**/node_modules/**,**/dist/**,**/coverage/** \
-                -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info || true
-            '''
+            bat """
+              npx sonar-scanner ^
+                -Dsonar.projectKey=cicd-tasklist-backend ^
+                -Dsonar.projectName=cicd-tasklist-backend ^
+                -Dsonar.sources=src ^
+                -Dsonar.tests=src/__tests__ ^
+                -Dsonar.language=ts ^
+                -Dsonar.sourceEncoding=UTF-8 ^
+                -Dsonar.host.url=http://localhost:9000 ^
+                -Dsonar.login=%SONAR_TOKEN% ^
+                -Dsonar.exclusions=src/__tests__/**,**/node_modules/**,**/dist/**,**/coverage/** ^
+                -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+            """
           }
         }
       }
@@ -62,30 +62,32 @@ pipeline {
 
     stage('Security scan with Trivy') {
       steps {
-        sh '''
-          if ! command -v trivy &> /dev/null; then
-            docker run --rm -v $(pwd):/root aquasec/trivy fs /root --exit-code 0 --format table || true
-          else
-            trivy fs --exit-code 0 --format table . || true
-          fi
+        bat '''
+          where trivy >nul 2>nul
+          if %errorlevel% neq 0 (
+            echo Trivy not found, skipping filesystem scan
+            exit /b 0
+          )
+          trivy fs --exit-code 0 --format table .
         '''
       }
     }
 
     stage('Build Docker image') {
       steps {
-        sh 'docker build -t $DOCKER_IMAGE .'
+        bat 'docker build -t %DOCKER_IMAGE% .'
       }
     }
 
     stage('Security scan Docker image with Trivy') {
       steps {
-        sh '''
-          if ! command -v trivy &> /dev/null; then
-            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --exit-code 0 --format table $DOCKER_IMAGE || true
-          else
-            trivy image --exit-code 0 --format table $DOCKER_IMAGE || true
-          fi
+        bat '''
+          where trivy >nul 2>nul
+          if %errorlevel% neq 0 (
+            echo Trivy not found, skipping image scan
+            exit /b 0
+          )
+          trivy image --exit-code 0 --format table %DOCKER_IMAGE%
         '''
       }
     }
@@ -93,9 +95,9 @@ pipeline {
     stage('Publish Docker image') {
       steps {
         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-          sh '''
-            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-            docker push $DOCKER_IMAGE
+          bat '''
+            echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin
+            docker push %DOCKER_IMAGE%
             docker logout
           '''
         }
