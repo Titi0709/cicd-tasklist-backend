@@ -5,8 +5,6 @@ pipeline {
     NODE_ENV = 'test'
     DOCKER_IMAGE = 'thibaultlefay/tasklist-backend:latest'
     SONAR_HOST_URL = 'http://localhost:9000'
-    NODE_VERSION = 'v20.11.0'
-    NODE_BIN = '/tmp/node-v20.11.0-linux-x64/bin'
   }
 
   stages {
@@ -16,43 +14,27 @@ pipeline {
       }
     }
 
-    stage('Setup Node.js') {
-      steps {
-        sh '''
-          # Always download fresh Node.js to /tmp
-          echo "Installing Node.js v20.11.0..."
-          cd /tmp
-          rm -rf node-v20.11.0-linux-x64 2>/dev/null || true
-          curl -fsSL https://nodejs.org/dist/v20.11.0/node-v20.11.0-linux-x64.tar.gz | tar -xz
-          
-          # Verify installation
-          /tmp/node-v20.11.0-linux-x64/bin/node --version
-          /tmp/node-v20.11.0-linux-x64/bin/npm --version
-        '''
-      }
-    }
-
     stage('Install dependencies') {
       steps {
-        sh '/tmp/node-v20.11.0-linux-x64/bin/npm ci'
+        sh 'npm ci'
       }
     }
 
     stage('Run unit tests') {
       steps {
-        sh '/tmp/node-v20.11.0-linux-x64/bin/npm run test:coverage'
+        sh 'npm run test:coverage'
       }
     }
 
     stage('Run E2E tests') {
       steps {
-        sh '/tmp/node-v20.11.0-linux-x64/bin/npm run test:e2e:coverage || true'
+        sh 'npm run test:e2e:coverage || true'
       }
     }
 
     stage('Build backend') {
       steps {
-        sh '/tmp/node-v20.11.0-linux-x64/bin/npm run build'
+        sh 'npm run build'
       }
     }
 
@@ -61,7 +43,7 @@ pipeline {
         script {
           withCredentials([string(credentialsId: 'sonar-backend-token', variable: 'SONAR_TOKEN')]) {
             sh '''
-              /tmp/node-v20.11.0-linux-x64/bin/npx sonar-scanner \
+              npx sonar-scanner \
                 -Dsonar.projectKey=cicd-tasklist-backend \
                 -Dsonar.projectName=cicd-tasklist-backend \
                 -Dsonar.sources=src \
