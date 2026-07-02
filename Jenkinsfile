@@ -23,7 +23,7 @@ pipeline {
           echo "Installing Node.js v20.11.0..."
           cd /tmp
           rm -rf node-v20.11.0-linux-x64 2>/dev/null || true
-          curl -fsSL https://nodejs.org/dist/v20.11.0/node-v20.11.0-linux-x64.tar.xz | tar -xJ
+          curl -fsSL https://nodejs.org/dist/v20.11.0/node-v20.11.0-linux-x64.tar.gz | tar -xz
           
           # Verify installation
           /tmp/node-v20.11.0-linux-x64/bin/node --version
