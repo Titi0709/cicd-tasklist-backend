@@ -6,7 +6,7 @@ pipeline {
     DOCKER_IMAGE = 'thibaultlefay/tasklist-backend:latest'
     SONAR_HOST_URL = 'http://localhost:9000'
     NODE_VERSION = 'v20.11.0'
-    NODE_PATH = '/tmp/node-${NODE_VERSION}-linux-x64/bin'
+    NODE_HOME = '/tmp/node-${NODE_VERSION}-linux-x64'
   }
 
   stages {
@@ -28,9 +28,15 @@ pipeline {
             echo "Installing Node.js ${NODE_VERSION}..."
             cd /tmp
             curl -fsSL https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-linux-x64.tar.xz | tar -xJ
-            export PATH=${NODE_PATH}:$PATH
-            node --version
-            npm --version
+            
+            # Create a setup script for all subsequent stages
+            cat > /tmp/node-setup.sh << 'SETUP_EOF'
+export PATH=/tmp/node-${NODE_VERSION}-linux-x64/bin:$PATH
+SETUP_EOF
+            
+            # Verify installation
+            /tmp/node-${NODE_VERSION}-linux-x64/bin/node --version
+            /tmp/node-${NODE_VERSION}-linux-x64/bin/npm --version
           fi
         '''
       }
@@ -39,7 +45,7 @@ pipeline {
     stage('Install dependencies') {
       steps {
         sh '''
-          export PATH=${NODE_PATH}:$PATH
+          source /tmp/node-setup.sh 2>/dev/null || export PATH=/tmp/node-v20.11.0-linux-x64/bin:$PATH
           npm ci
         '''
       }
@@ -48,7 +54,7 @@ pipeline {
     stage('Run unit tests') {
       steps {
         sh '''
-          export PATH=${NODE_PATH}:$PATH
+          source /tmp/node-setup.sh 2>/dev/null || export PATH=/tmp/node-v20.11.0-linux-x64/bin:$PATH
           npm run test:coverage
         '''
       }
@@ -57,7 +63,7 @@ pipeline {
     stage('Run E2E tests') {
       steps {
         sh '''
-          export PATH=${NODE_PATH}:$PATH
+          source /tmp/node-setup.sh 2>/dev/null || export PATH=/tmp/node-v20.11.0-linux-x64/bin:$PATH
           npm run test:e2e:coverage || true
         '''
       }
@@ -66,7 +72,7 @@ pipeline {
     stage('Build backend') {
       steps {
         sh '''
-          export PATH=${NODE_PATH}:$PATH
+          source /tmp/node-setup.sh 2>/dev/null || export PATH=/tmp/node-v20.11.0-linux-x64/bin:$PATH
           npm run build
         '''
       }
@@ -77,7 +83,7 @@ pipeline {
         script {
           withCredentials([string(credentialsId: 'sonar-backend-token', variable: 'SONAR_TOKEN')]) {
             sh '''
-              export PATH=${NODE_PATH}:$PATH
+              source /tmp/node-setup.sh 2>/dev/null || export PATH=/tmp/node-v20.11.0-linux-x64/bin:$PATH
               
               npx sonar-scanner \
                 -Dsonar.projectKey=cicd-tasklist-backend \
@@ -99,7 +105,6 @@ pipeline {
     stage('Security scan with Trivy') {
       steps {
         sh '''
-          # Use Docker image for Trivy if not installed
           if ! command -v trivy &> /dev/null; then
             docker run --rm -v $(pwd):/root aquasec/trivy fs /root --exit-code 0 --format table || true
           else
