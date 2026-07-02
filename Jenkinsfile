@@ -6,7 +6,7 @@ pipeline {
     DOCKER_IMAGE = 'thibaultlefay/tasklist-backend:latest'
     SONAR_HOST_URL = 'http://localhost:9000'
     NODE_VERSION = 'v20.11.0'
-    NODE_HOME = '/tmp/node-${NODE_VERSION}-linux-x64'
+    NODE_BIN = '/tmp/node-v20.11.0-linux-x64/bin'
   }
 
   stages {
@@ -19,62 +19,40 @@ pipeline {
     stage('Setup Node.js') {
       steps {
         sh '''
-          # Check if node is already available
-          if command -v node &> /dev/null; then
-            echo "Node.js already available:"
-            node --version
-            npm --version
-          else
-            echo "Installing Node.js ${NODE_VERSION}..."
-            cd /tmp
-            curl -fsSL https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-linux-x64.tar.xz | tar -xJ
-            
-            # Create a setup script for all subsequent stages
-            cat > /tmp/node-setup.sh << 'SETUP_EOF'
-export PATH=/tmp/node-${NODE_VERSION}-linux-x64/bin:$PATH
-SETUP_EOF
-            
-            # Verify installation
-            /tmp/node-${NODE_VERSION}-linux-x64/bin/node --version
-            /tmp/node-${NODE_VERSION}-linux-x64/bin/npm --version
-          fi
+          # Always download fresh Node.js to /tmp
+          echo "Installing Node.js v20.11.0..."
+          cd /tmp
+          rm -rf node-v20.11.0-linux-x64 2>/dev/null || true
+          curl -fsSL https://nodejs.org/dist/v20.11.0/node-v20.11.0-linux-x64.tar.xz | tar -xJ
+          
+          # Verify installation
+          /tmp/node-v20.11.0-linux-x64/bin/node --version
+          /tmp/node-v20.11.0-linux-x64/bin/npm --version
         '''
       }
     }
 
     stage('Install dependencies') {
       steps {
-        sh '''
-          source /tmp/node-setup.sh 2>/dev/null || export PATH=/tmp/node-v20.11.0-linux-x64/bin:$PATH
-          npm ci
-        '''
+        sh '/tmp/node-v20.11.0-linux-x64/bin/npm ci'
       }
     }
 
     stage('Run unit tests') {
       steps {
-        sh '''
-          source /tmp/node-setup.sh 2>/dev/null || export PATH=/tmp/node-v20.11.0-linux-x64/bin:$PATH
-          npm run test:coverage
-        '''
+        sh '/tmp/node-v20.11.0-linux-x64/bin/npm run test:coverage'
       }
     }
 
     stage('Run E2E tests') {
       steps {
-        sh '''
-          source /tmp/node-setup.sh 2>/dev/null || export PATH=/tmp/node-v20.11.0-linux-x64/bin:$PATH
-          npm run test:e2e:coverage || true
-        '''
+        sh '/tmp/node-v20.11.0-linux-x64/bin/npm run test:e2e:coverage || true'
       }
     }
 
     stage('Build backend') {
       steps {
-        sh '''
-          source /tmp/node-setup.sh 2>/dev/null || export PATH=/tmp/node-v20.11.0-linux-x64/bin:$PATH
-          npm run build
-        '''
+        sh '/tmp/node-v20.11.0-linux-x64/bin/npm run build'
       }
     }
 
@@ -83,16 +61,14 @@ SETUP_EOF
         script {
           withCredentials([string(credentialsId: 'sonar-backend-token', variable: 'SONAR_TOKEN')]) {
             sh '''
-              source /tmp/node-setup.sh 2>/dev/null || export PATH=/tmp/node-v20.11.0-linux-x64/bin:$PATH
-              
-              npx sonar-scanner \
+              /tmp/node-v20.11.0-linux-x64/bin/npx sonar-scanner \
                 -Dsonar.projectKey=cicd-tasklist-backend \
                 -Dsonar.projectName=cicd-tasklist-backend \
                 -Dsonar.sources=src \
                 -Dsonar.tests=src/__tests__ \
                 -Dsonar.language=ts \
                 -Dsonar.sourceEncoding=UTF-8 \
-                -Dsonar.host.url=${SONAR_HOST_URL} \
+                -Dsonar.host.url=http://localhost:9000 \
                 -Dsonar.login=${SONAR_TOKEN} \
                 -Dsonar.exclusions=src/__tests__/**,**/node_modules/**,**/dist/**,**/coverage/** \
                 -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info || true
